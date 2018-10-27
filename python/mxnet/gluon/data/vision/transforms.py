@@ -25,7 +25,7 @@ from .... import image
 from ....base import numeric_types
 
 
-class Compose(Sequential):
+class Compose(HybridSequential):
     """Sequentially composes multiple transforms.
 
     Parameters
