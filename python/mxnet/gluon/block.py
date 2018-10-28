@@ -867,7 +867,7 @@ class HybridBlock(Block):
         """Infers data type of Parameters from inputs."""
         self._infer_attrs('infer_type', 'dtype', *args)
 
-    def export(self, path, epoch=0):
+    def export(self, path, epoch=0, output='both'):
         """Export HybridBlock to json format that can be loaded by
         `SymbolBlock.imports`, `mxnet.mod.Module` or the C++ interface.
 
@@ -887,18 +887,21 @@ class HybridBlock(Block):
                 "Please first call block.hybridize() and then run forward with "
                 "this block at least once before calling export.")
         sym = self._cached_graph[1]
+        # save the net structure
         sym.save('%s-symbol.json'%path)
-
-        arg_names = set(sym.list_arguments())
-        aux_names = set(sym.list_auxiliary_states())
-        arg_dict = {}
-        for name, param in self.collect_params().items():
-            if name in arg_names:
-                arg_dict['arg:%s'%name] = param._reduce()
-            else:
-                assert name in aux_names
-                arg_dict['aux:%s'%name] = param._reduce()
-        ndarray.save('%s-%04d.params'%(path, epoch), arg_dict)
+        
+        # save the params
+        if output == 'both':    
+            arg_names = set(sym.list_arguments())
+            aux_names = set(sym.list_auxiliary_states())
+            arg_dict = {}
+            for name, param in self.collect_params().items():
+                if name in arg_names:
+                    arg_dict['arg:%s'%name] = param._reduce()
+                else:
+                    assert name in aux_names
+                    arg_dict['aux:%s'%name] = param._reduce()
+            ndarray.save('%s-%04d.params'%(path, epoch), arg_dict)
 
     def forward(self, x, *args):
         """Defines the forward computation. Arguments can be either

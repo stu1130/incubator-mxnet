@@ -29,8 +29,8 @@ class Transform(object):
     def __call__(self, data):
         return self._transforms(data)
 
-    def export(self, prefix):
-        self._transforms.export(prefix)
+    def save(self, prefix):
+        self._transforms.export(prefix, output='net')
 
     def load(self, path):
         self._transforms = SymbolBlock.imports(path, ['data'])
