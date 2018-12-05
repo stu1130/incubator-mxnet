@@ -23,8 +23,9 @@ import shutil
 import tempfile
 import unittest
 
-from nose.tools import raises
 from nose.tools import nottest
+from nose.tools import raises
+
 
 def _get_data(url, dirname):
     import os, tarfile
@@ -296,7 +297,6 @@ class TestImage(unittest.TestCase):
                 path_imglist=fname, path_root='', last_batch_handle='pad')
         ]
         self._test_imageiter_last_batch(imageiter_list, (2, 3, 400, 400))
-
 
     def test_det_augmenters(self):
         # only test if all augmenters will work
