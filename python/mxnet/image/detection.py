@@ -676,7 +676,7 @@ class ImageDetIter(ImageIter):
                                            path_root=path_root, path_imgidx=path_imgidx,
                                            shuffle=shuffle, part_index=part_index,
                                            num_parts=num_parts, aug_list=[], imglist=imglist,
-                                           data_name=data_name, label_name=label_name, 
+                                           data_name=data_name, label_name=label_name,
                                            last_batch_handle=last_batch_handle)
 
         if aug_list is None:
