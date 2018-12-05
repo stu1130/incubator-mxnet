@@ -658,8 +658,6 @@ class ImageDetIter(ImageIter):
         Data name for provided symbols.
     label_name : str
         Name for detection labels
-    dtype : str
-        Label data type. Default: float32. Other options: int32, int64, float64
     last_batch_handle : str, optional
         How to handle the last batch.
         This parameter can be 'pad'(default), 'discard' or 'roll_over'.
@@ -672,13 +670,14 @@ class ImageDetIter(ImageIter):
     def __init__(self, batch_size, data_shape,
                  path_imgrec=None, path_imglist=None, path_root=None, path_imgidx=None,
                  shuffle=False, part_index=0, num_parts=1, aug_list=None, imglist=None,
-                 data_name='data', label_name='label', dtype='float32', last_batch_handle='pad', **kwargs):
+                 data_name='data', label_name='label', last_batch_handle='pad', **kwargs):
         super(ImageDetIter, self).__init__(batch_size=batch_size, data_shape=data_shape,
                                            path_imgrec=path_imgrec, path_imglist=path_imglist,
                                            path_root=path_root, path_imgidx=path_imgidx,
                                            shuffle=shuffle, part_index=part_index,
                                            num_parts=num_parts, aug_list=[], imglist=imglist,
-                                           data_name=data_name, label_name=label_name, dtype=dtype last_batch_handle=last_batch_handle)
+                                           data_name=data_name, label_name=label_name, 
+                                           last_batch_handle=last_batch_handle)
 
         if aug_list is None:
             self.auglist = CreateDetAugmenter(data_shape, **kwargs)
