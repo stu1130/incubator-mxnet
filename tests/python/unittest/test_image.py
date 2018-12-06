@@ -151,6 +151,7 @@ class TestImage(unittest.TestCase):
             mx_result = mx.image.color_normalize(mx.nd.array(src),
                 mx.nd.array(mean), mx.nd.array(std))
             assert_almost_equal(mx_result.asnumpy(), (src - mean) / std, atol=1e-3)
+
     @nottest
     def _test_imageiter_last_batch(self, imageiter_list, assert_data_shape):
         test_iter = imageiter_list[0]
