@@ -23,7 +23,6 @@ import shutil
 import tempfile
 import unittest
 
-from nose.tools import nottest
 from nose.tools import raises
 
 
@@ -51,6 +50,62 @@ def _generate_objects():
     cid = np.random.randint(0, 20, size=num)
     label = np.hstack((cid[:, np.newaxis], boxes)).ravel().tolist()
     return [2, 5] + label
+
+def _test_imageiter_last_batch(imageiter_list, assert_data_shape):
+    test_iter = imageiter_list[0]
+    # test batch data shape
+    for _ in range(3):
+        for batch in test_iter:
+            assert batch.data[0].shape == assert_data_shape
+        test_iter.reset()
+    # test last batch handle(discard)
+    test_iter = imageiter_list[1]
+    i = 0
+    for batch in test_iter:
+        i += 1
+    assert i == 5
+    # test last_batch_handle(pad)
+    test_iter = imageiter_list[2]
+    i = 0
+    for batch in test_iter:
+        if i == 0:
+            first_three_data = batch.data[0][:2]
+        if i == 5:
+            last_three_data = batch.data[0][1:]
+        i += 1
+    assert i == 6
+    assert np.array_equal(first_three_data.asnumpy(), last_three_data.asnumpy())
+    # test last_batch_handle(roll_over)
+    test_iter = imageiter_list[3]
+    i = 0
+    for batch in test_iter:
+        if i == 0:
+            first_image = batch.data[0][0]
+        i += 1
+    assert i == 5
+    test_iter.reset()
+    first_batch_roll_over = test_iter.next()
+    assert np.array_equal(
+        first_batch_roll_over.data[0][1].asnumpy(), first_image.asnumpy())
+    assert first_batch_roll_over.pad == 2
+    # test iteratopr work properly after calling reset several times when last_batch_handle is roll_over
+    for _ in test_iter:
+        pass
+    test_iter.reset()
+    first_batch_roll_over_twice = test_iter.next()
+    assert np.array_equal(
+        first_batch_roll_over_twice.data[0][2].asnumpy(), first_image.asnumpy())
+    assert first_batch_roll_over_twice.pad == 1
+    # we've called next once
+    i = 1
+    for _ in test_iter:
+        i += 1
+    # test the third epoch with size 6
+    assert i == 6
+    # test shuffle option for sanity test
+    test_iter = imageiter_list[4]
+    for _ in test_iter:
+        pass
 
 
 class TestImage(unittest.TestCase):
@@ -152,63 +207,6 @@ class TestImage(unittest.TestCase):
                 mx.nd.array(mean), mx.nd.array(std))
             assert_almost_equal(mx_result.asnumpy(), (src - mean) / std, atol=1e-3)
 
-    @nottest
-    def _test_imageiter_last_batch(self, imageiter_list, assert_data_shape):
-        test_iter = imageiter_list[0]
-        # test batch data shape
-        for _ in range(3):
-            for batch in test_iter:
-                assert batch.data[0].shape == assert_data_shape
-            test_iter.reset()
-        # test last batch handle(discard)
-        test_iter = imageiter_list[1]
-        i = 0
-        for batch in test_iter:
-            i += 1
-        assert i == 5
-        # test last_batch_handle(pad)
-        test_iter = imageiter_list[2]
-        i = 0
-        for batch in test_iter:
-            if i == 0:
-                first_three_data = batch.data[0][:2]
-            if i == 5:
-                last_three_data = batch.data[0][1:]
-            i += 1
-        assert i == 6
-        assert np.array_equal(first_three_data.asnumpy(), last_three_data.asnumpy())
-        # test last_batch_handle(roll_over)
-        test_iter = imageiter_list[3]
-        i = 0
-        for batch in test_iter:
-            if i == 0:
-                first_image = batch.data[0][0]
-            i += 1
-        assert i == 5
-        test_iter.reset()
-        first_batch_roll_over = test_iter.next()
-        assert np.array_equal(
-            first_batch_roll_over.data[0][1].asnumpy(), first_image.asnumpy())
-        assert first_batch_roll_over.pad == 2
-        # test iteratopr work properly after calling reset several times when last_batch_handle is roll_over
-        for _ in test_iter:
-            pass
-        test_iter.reset()
-        first_batch_roll_over_twice = test_iter.next()
-        assert np.array_equal(
-            first_batch_roll_over_twice.data[0][2].asnumpy(), first_image.asnumpy())
-        assert first_batch_roll_over_twice.pad == 1
-        # we've called next once
-        i = 1
-        for _ in test_iter:
-            i += 1
-        # test the third epoch with size 6
-        assert i == 6
-        # test shuffle option for sanity test
-        test_iter = imageiter_list[4]
-        for _ in test_iter:
-            pass
-
     def test_imageiter(self):
         im_list = [[np.random.randint(0, 5), x] for x in TestImage.IMAGES]
         fname = './data/test_imageiter.lst'
@@ -235,7 +233,7 @@ class TestImage(unittest.TestCase):
                     mx.image.ImageIter(3, (3, 224, 224), label_width=1, imglist=imglist, shuffle=True,
                         path_imglist=path_imglist, path_root='', dtype=dtype, last_batch_handle='pad')
                 ]
-                self._test_imageiter_last_batch(imageiter_list, (2, 3, 224, 224))
+                _test_imageiter_last_batch(imageiter_list, (2, 3, 224, 224))
 
     @with_seed()
     def test_augmenters(self):
@@ -297,7 +295,7 @@ class TestImage(unittest.TestCase):
             mx.image.ImageDetIter(3, (3, 400, 400), shuffle=True,
                 path_imglist=fname, path_root='', last_batch_handle='pad')
         ]
-        self._test_imageiter_last_batch(imageiter_list, (2, 3, 400, 400))
+        _test_imageiter_last_batch(imageiter_list, (2, 3, 400, 400))
 
     def test_det_augmenters(self):
         # only test if all augmenters will work
