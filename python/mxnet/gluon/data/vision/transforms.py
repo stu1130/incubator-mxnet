@@ -278,7 +278,7 @@ class Resize(HybridBlock):
         self._size = size
         self._interpolation = interpolation
 
-   def hybrid_forward(self, F, x):
+    def hybrid_forward(self, F, x):
         return F.image.resize(x, self._size, self._keep, self._interpolation)
 
 class RandomFlipLeftRight(HybridBlock):
