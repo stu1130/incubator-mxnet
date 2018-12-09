@@ -201,10 +201,16 @@ bool ResizeShape(const nnvm::NodeAttrs& attrs,
                              std::vector<TShape> *out_attrs) {
   const auto& ishape = (*in_attrs)[0];
   const ResizeParam& param = nnvm::get<ResizeParam>(attrs.parsed);
-  auto t = GetHeightAndWidth(ishape[0], ishape[1], param);
-  out_attrs->clear();
-  out_attrs->push_back(mshadow::Shape3(std::get<0>(t), std::get<1>(t), ishape[2]));
-
+  std::tuple<int, int> t;
+  if (ishape.ndim() == 3) {
+    t = GetHeightAndWidth(ishape[0], ishape[1], param);
+    out_attrs->clear();
+    out_attrs->push_back(mshadow::Shape3(std::get<0>(t), std::get<1>(t), ishape[2]));
+  } else {
+    t = GetHeightAndWidth(ishape[1], ishape[2], param);
+    out_attrs->clear();
+    out_attrs->push_back(mshadow::Shape4(ishape[0], std::get<0>(t), std::get<1>(t), ishape[3]));
+  }
   return true;
 }
 
@@ -212,16 +218,31 @@ void ResizeImpl(const std::vector<TBlob> &inputs,
                       const std::vector<TBlob> &outputs,
                       const int height,
                       const int width,
-                      const int interp) {
+                      const int interp,
+                      const int input_index = 0,
+                      const int output_index = 0) {
 #if MXNET_USE_OPENCV
   CHECK_NE(inputs[0].type_flag_, mshadow::kFloat16) << "image resize doesn't support fp16";
   const int DTYPE[] = {CV_32F, CV_64F, -1, CV_8U, CV_32S};
-  int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[2]);
-  cv::Mat buf(inputs[0].shape_[0], inputs[0].shape_[1], cv_type, inputs[0].dptr_);
-  cv::Mat dst(outputs[0].shape_[0], outputs[0].shape_[1], cv_type, outputs[0].dptr_);
-  cv::resize(buf, dst, cv::Size(width, height), 0, 0, interp);
-  CHECK(!dst.empty());
-  CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr_);
+  if (inputs[0].ndim() == 3) {
+    int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[2]);
+    cv::Mat buf(inputs[0].shape_[0], inputs[0].shape_[1], cv_type, inputs[0].dptr_);
+    cv::Mat dst(outputs[0].shape_[0], outputs[0].shape_[1], cv_type, outputs[0].dptr_);
+    cv::resize(buf, dst, cv::Size(width, height), 0, 0, interp);
+    CHECK(!dst.empty());
+    CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr_);
+  } else {
+    int length = inputs[0].shape_[0] * inputs[0].shape_[1] *inputs[0].shape_[2] * inputs[0].shape_[3];
+    auto input = inputs[0].dptr<float>();
+    int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[3]);
+    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+      cv::Mat buf(inputs[0].shape_[1], inputs[0].shape_[2], cv_type, inputs[0].dptr<DType>() + input_index);
+      cv::Mat dst(outputs[0].shape_[1], outputs[0].shape_[2], cv_type, outputs[0].dptr<DType>() + output_index);
+      cv::resize(buf, dst, cv::Size(width, height), 0, 0, interp);
+      CHECK(!dst.empty());
+      CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr<DType>() + output_index);
+    });
+  }
 #else
   LOG(FATAL) << "Build with USE_OPENCV=1 for image resize operator.";
 #endif  // MXNET_USE_OPENCV
@@ -234,8 +255,19 @@ void Resize(const nnvm::NodeAttrs &attrs,
                    const std::vector<TBlob> &outputs) {
   CHECK_EQ(outputs.size(), 1U);
   const ResizeParam& param = nnvm::get<ResizeParam>(attrs.parsed);
-  auto t = GetHeightAndWidth(inputs[0].shape_[0], inputs[0].shape_[1], param);
-  ResizeImpl(inputs, outputs, std::get<0>(t), std::get<1>(t), param.interp);
+  std::tuple<int, int> t;
+  if (inputs[0].ndim() == 3) {
+    t = GetHeightAndWidth(inputs[0].shape_[0], inputs[0].shape_[1], param);
+    ResizeImpl(inputs, outputs, std::get<0>(t), std::get<1>(t), param.interp);
+  } else {
+    t = GetHeightAndWidth(inputs[0].shape_[1], inputs[0].shape_[2], param);
+    const auto batch_size = inputs[0].shape_[0];
+    const auto input_step = inputs[0].shape_[1] * inputs[0].shape_[2] * inputs[0].shape_[3];
+    const auto output_step = std::get<0>(t) * std::get<1>(t) * inputs[0].shape_[3];
+    for (auto i = 0;i < batch_size; ++i) {
+      ResizeImpl(inputs, outputs, std::get<0>(t), std::get<1>(t), param.interp, input_step * i, output_step * i);
+    }
+  }
 }
 
 struct CenterCropParam : public dmlc::Parameter<CenterCropParam> {
