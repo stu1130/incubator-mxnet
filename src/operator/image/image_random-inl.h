@@ -168,8 +168,8 @@ struct ResizeParam : public dmlc::Parameter<ResizeParam> {
   }
 };
 
-inline std::tuple<int, int> GetHeightAndWidth(const int data_h,
-                                              const int data_w,
+inline std::tuple<int, int> GetHeightAndWidth(int data_h,
+                                              int data_w,
                                               const ResizeParam& param) {
   CHECK_LE(param.size.ndim(), 2)
       << "Input size dimension must be 1 or 2, but got "
@@ -264,8 +264,9 @@ void Resize(const nnvm::NodeAttrs &attrs,
     const auto batch_size = inputs[0].shape_[0];
     const auto input_step = inputs[0].shape_[1] * inputs[0].shape_[2] * inputs[0].shape_[3];
     const auto output_step = std::get<0>(t) * std::get<1>(t) * inputs[0].shape_[3];
+    #pragma omp parallel for
     for (auto i = 0;i < batch_size; ++i) {
-      ResizeImpl(inputs, outputs, std::get<0>(t), std::get<1>(t), param.interp, input_step * i, output_step * i);
+      ResizeImpl(inputs, outputs, std::get<0>(t), std::get<1>(t), param.interp, i * input_step, i * output_step);
     }
   }
 }
@@ -330,22 +331,37 @@ bool CenterCropShape(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-void Crop(const int x,
-          const int y,
-          const int width,
-          const int height,
+void Crop(int x,
+          int y,
+          int width,
+          int height,
           const std::vector<TBlob> &inputs,
-          const std::vector<TBlob> &outputs) {
+          const std::vector<TBlob> &outputs,
+          int input_index = 0,
+          int output_index = 0) {
 #if MXNET_USE_OPENCV
   CHECK_NE(inputs[0].type_flag_, mshadow::kFloat16) << "image resize doesn't support fp16";
   const int DTYPE[] = {CV_32F, CV_64F, -1, CV_8U, CV_32S};
-  int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[2]);
-  cv::Mat buf(inputs[0].shape_[0], inputs[0].shape_[1], cv_type, inputs[0].dptr_);
-  cv::Mat dst(outputs[0].shape_[0], outputs[0].shape_[1], cv_type, outputs[0].dptr_);
-  cv::Rect roi(x, y, width, height);
-  buf(roi).copyTo(dst);
-  CHECK(!dst.empty());
-  CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr_);
+  if (inputs[0].ndim() == 3) {
+    int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[2]);
+    cv::Mat buf(inputs[0].shape_[0], inputs[0].shape_[1], cv_type, inputs[0].dptr_);
+    cv::Mat dst(outputs[0].shape_[0], outputs[0].shape_[1], cv_type, outputs[0].dptr_);
+    cv::Rect roi(x, y, width, height);
+    buf(roi).copyTo(dst);
+    CHECK(!dst.empty());
+    CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr_);
+  } else {
+    int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[2]);
+    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+      cv::Mat buf(inputs[0].shape_[0], inputs[0].shape_[1], cv_type, inputs[0].dptr<DType>() + input_index);
+      cv::Mat dst(outputs[0].shape_[0], outputs[0].shape_[1], cv_type, outputs[0].dptr<DType>() + output_index);
+      cv::Rect roi(x, y, width, height);
+      buf(roi).copyTo(dst);
+      CHECK(!dst.empty());
+      CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr<DType>() + output_index);
+    });
+  }
+  
 #else
   LOG(FATAL) << "Build with USE_OPENCV=1 for image crop operator.";
 #endif  // MXNET_USE_OPENCV
@@ -357,55 +373,28 @@ void CenterCrop(const nnvm::NodeAttrs &attrs,
                    const std::vector<OpReqType> &req,
                    const std::vector<TBlob> &outputs) {
   const CenterCropParam& param = nnvm::get<CenterCropParam>(attrs.parsed);
-  const auto h = inputs[0].shape_[0];
-  const auto w = inputs[0].shape_[1];
-  const auto t = ScaleDown(std::make_tuple(h, w), GetHeightAndWidthFromSize(param));
-  const auto x0 = static_cast<int>((w - std::get<1>(t)) / 2);
-  const auto y0 = static_cast<int>((h - std::get<0>(t)) / 2);
-  Crop(x0, y0, std::get<1>(t), std::get<0>(t), inputs, outputs);
+  if (inputs[0].ndim() == 3) {
+    const auto h = inputs[0].shape_[0];
+    const auto w = inputs[0].shape_[1];
+    const auto t = ScaleDown(std::make_tuple(h, w), GetHeightAndWidthFromSize(param));
+    const auto x0 = static_cast<int>((w - std::get<1>(t)) / 2);
+    const auto y0 = static_cast<int>((h - std::get<0>(t)) / 2);
+    Crop(x0, y0, std::get<1>(t), std::get<0>(t), inputs, outputs);  
+  } else {
+    const auto batch_size = inputs[0].shape_[0];
+    const auto h = inputs[0].shape_[1];
+    const auto w = inputs[0].shape_[2];
+    const auto t = ScaleDown(std::make_tuple(h, w), GetHeightAndWidthFromSize(param));
+    const auto x0 = static_cast<int>((w - std::get<1>(t)) / 2);
+    const auto y0 = static_cast<int>((h - std::get<0>(t)) / 2);
+    const auto input_step = inputs[0].shape_[1] * inputs[0].shape_[2] * inputs[0].shape_[3];
+    const auto output_step = std::get<0>(t) * std::get<1>(t) * inputs[0].shape_[3];
+    #pragma omp parallel for
+    for (int i = 0; i < batch_size; i++) {
+      Crop(x0, y0, std::get<1>(t), std::get<0>(t), inputs, outputs, i * input_step, i * output_step);
+    }
+  }
 }
-
-// struct RandomResizeCropParam : public dmlc::Parameter<RandomResizeCropParam> {
-//   nnvm::Tuple<int> size;
-//   nnvm::Tuple<int> area;
-//   nnvm::Tuple<int> ratio;
-//   int interp;
-//   DMLC_DECLARE_PARAMETER(RandomResizeCropParam) {
-//     DMLC_DECLARE_FIELD(size)
-//     .set_default(nnvm::Tuple<int>())
-//     .describe("size : tuple of (int, int)
-//       Size of the crop formatted as (width, height)");
-//     DMLC_DECLARE_FIELD(area)
-//     .set_default(nnvm::Tuple<int>())
-//     .describe("float in (0, 1] or tuple of (float, float)
-//       If tuple, minimum area and maximum area to be maintained after cropping
-//       If float, minimum area to be maintained after cropping, maximum area is set to 1.0");
-//     DMLC_DECLARE_FIELD(ratio)
-//     .set_default(nnvm::Tuple<int>())
-//     .describe("tuple of (float, float)
-//       Aspect ratio range as (min_aspect_ratio, max_aspect_ratio)");
-//     DMLC_DECLARE_FIELD(interp)
-//     .set_default(2)
-//     .describe("ratio : tuple of (float, float)
-//       Aspect ratio range as (min_aspect_ratio, max_aspect_ratio)
-//       interp: int, optional, default=2
-//       Interpolation method. See resize_short for details.");
-//   }
-// };
-
-// void RandomResizeCropShape(const nnvm::NodeAttrs& attrs,
-//                              std::vector<TShape> *in_attrs,
-//                              std::vector<TShape> *out_attrs) {
-                    
-// }
-
-// void RandomResizeCrop(const nnvm::NodeAttrs &attrs,
-//                       const OpContext &ctx,
-//                       const std::vector<TBlob> &inputs,
-//                       const std::vector<OpReqType> &req,
-//                       const std::vector<TBlob> &outputs) {
-
-// }
 
 template<typename DType>
 inline DType saturate_cast(const float& src) {
