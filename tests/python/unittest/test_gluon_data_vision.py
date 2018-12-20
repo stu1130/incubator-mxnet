@@ -19,10 +19,12 @@ import mxnet as mx
 import mxnet.ndarray as nd
 import numpy as np
 from mxnet import gluon
+from mxnet.base import MXNetError
+from mxnet import image
 from mxnet.gluon.data.vision import transforms
 from mxnet.test_utils import assert_almost_equal
 from mxnet.test_utils import almost_equal
-from common import setup_module, with_seed, teardown
+from common import assertRaises, setup_module, with_seed, teardown
 
 
 @with_seed()
@@ -75,6 +77,35 @@ def test_crop():
     def _test_height_and_width_below_zero_Exception():
         transforms.Crop(0, 0, -100, -50)(data_in)
     assertRaises(MXNetError, _test_height_and_width_below_zero_Exception)
+
+
+@with_seed()
+def test_center_crop():
+    # test normal case
+    data_in = nd.random.uniform(0, 255, (300, 200, 3)).astype('uint8')
+    out_nd = transforms.CenterCrop((100, 100), 2)(data_in)
+    data_expected = image.center_crop(data_in, (100, 100), 2)[0]
+    assert_almost_equal(out_nd.asnumpy(), data_expected.asnumpy())
+    # test 4D input
+    data_bath_in = nd.random.uniform(0, 255, (3, 300, 200, 3)).astype('uint8')
+    out_batch_nd = transforms.CenterCrop((100, 100), 2)(data_bath_in)
+    for i in range(len(out_batch_nd)):
+        assert_almost_equal(image.center_crop(data_bath_in[i], (100, 100), 2)[0].asnumpy(),
+            out_batch_nd[i].asnumpy())
+    # test size is larger than input image
+    data_in = nd.random.uniform(0, 255, (100, 100, 3)).astype('uint8')
+    out_nd = transforms.CenterCrop((200, 150), 2)(data_in)
+    data_expected = image.center_crop(data_in, (200, 150), 2)[0]
+    assert_almost_equal(out_nd.asnumpy(), data_expected.asnumpy())
+    # test size is larger than input image
+    data_bath_in = nd.random.uniform(0, 255, (3, 100, 100, 3)).astype('uint8')
+    out_batch_nd = transforms.CenterCrop((200, 150), 2)(data_bath_in)
+    for i in range(len(out_batch_nd)):
+        assert_almost_equal(image.center_crop(data_bath_in[i], (200, 150), 2)[0].asnumpy(),
+            out_batch_nd[i].asnumpy())
+    def _test_size_below_zero_Exception():
+        transforms.CenterCrop((-200, 150), 2)(data_in)
+    assertRaises(MXNetError, _test_size_below_zero_Exception)    
 
 
 @with_seed()
