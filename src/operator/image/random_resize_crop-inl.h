@@ -72,7 +72,7 @@ bool RandomResizeCropShape(const nnvm::NodeAttrs& attrs,
     << "Input image dimension should be 3 or 4 but got "
     << in_attrs->at(0).ndim();
   const auto& ishape = (*in_attrs)[0];
-  const CenterCropParam& param = nnvm::get<CenterCropParam>(attrs.parsed);
+  const RandomResizeCropParam& param = nnvm::get<RandomResizeCropParam>(attrs.parsed);
   const auto size = GetHeightAndWidthFromSize(param);
 
   CHECK((size.height > 0) && (size.width > 0))
