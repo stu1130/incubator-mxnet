@@ -23,28 +23,28 @@
   * \brief the image crop operator implementation
   */
  
-  #ifndef MXNET_OPERATOR_IMAGE_CROP_INL_H_
- #define MXNET_OPERATOR_IMAGE_CROP_INL_H_
+#ifndef MXNET_OPERATOR_IMAGE_CROP_INL_H_
+#define MXNET_OPERATOR_IMAGE_CROP_INL_H_
  
   
-  #include <algorithm>
- #include <vector>
+#include <algorithm>
+#include <vector>
  
-  #include "mxnet/base.h"
- #include "dmlc/optional.h"
- #include "image_utils.h"
- #include "../mxnet_op.h"
- #include "../operator_common.h"
+#include "mxnet/base.h"
+#include "dmlc/optional.h"
+#include "image_utils.h"
+#include "../mxnet_op.h"
+#include "../operator_common.h"
  
-  #if MXNET_USE_OPENCV
-   #include <opencv2/opencv.hpp>
- #endif  // MXNET_USE_OPENCV
+#if MXNET_USE_OPENCV
+  #include <opencv2/opencv.hpp>
+#endif  // MXNET_USE_OPENCV
  
-  namespace mxnet {
- namespace op {
- namespace image {
+namespace mxnet {
+namespace op {
+namespace image {
  
-  struct CropParam : public dmlc::Parameter<CropParam> {
+struct CropParam : public dmlc::Parameter<CropParam> {
    int x;
    int y;
    int width;
@@ -72,9 +72,9 @@
    }
  };
  
-  inline bool CropShape(const nnvm::NodeAttrs& attrs,
-                              std::vector<TShape> *in_attrs,
-                              std::vector<TShape> *out_attrs) {
+bool CropShape(const nnvm::NodeAttrs& attrs,
+                      std::vector<TShape> *in_attrs,
+                      std::vector<TShape> *out_attrs) {
    // input attrs should only be (h, w, c) or (n, h, w, c)
    CHECK((in_attrs->at(0).ndim() == 3U) || (in_attrs->at(0).ndim() == 4U))
      << "Input image dimension should be 3 or 4 but got "
@@ -119,86 +119,8 @@
    return true;
  }
  
-  // overloading version of CropImpl to do resize after crop
- inline void CropImpl(int x,
-                       int y,
-                       int height,
-                       int width,
-                       const std::vector<TBlob> &inputs,
-                       const std::vector<TBlob> &outputs,
-                       int input_index = 0,
-                       int output_index = 0) {
- #if MXNET_USE_OPENCV
-   CHECK_NE(inputs[0].type_flag_, mshadow::kFloat16) << "opencv doesn't support fp16";
-   // mapping to opencv matrix element type according to channel
-   const int DTYPE[] = {CV_32F, CV_64F, -1, CV_8U, CV_32S};
-   if (inputs[0].ndim() == 3) {
-     const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[2]);
-     cv::Mat buf(inputs[0].shape_[H], inputs[0].shape_[W], cv_type, inputs[0].dptr_);
-     cv::Mat dst(outputs[0].shape_[H], outputs[0].shape_[W], cv_type, outputs[0].dptr_);
-     cv::Rect roi(x, y, width, height);
-     buf(roi).copyTo(dst);
-     CHECK(!dst.empty());
-     CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr_);
-   } else {
-     const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[3]);
-     MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-       cv::Mat buf(inputs[0].shape_[kH], inputs[0].shape_[kW], cv_type,
-         inputs[0].dptr<DType>() + input_index);
-       cv::Mat dst(outputs[0].shape_[kH], outputs[0].shape_[kW], cv_type,
-         outputs[0].dptr<DType>() + output_index);
-       cv::Rect roi(x, y, width, height);
-       buf(roi).copyTo(dst);
-       CHECK(!dst.empty());
-       CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr<DType>() + output_index);
-     });
-   }
- #else
-   LOG(FATAL) << "Build with USE_OPENCV=1 for image crop operator.";
- #endif  // MXNET_USE_OPENCV
- }
- 
-  inline void CropImpl(int x,
-                       int y,
-                       int height,
-                       int width,
-                       const std::vector<TBlob> &inputs,
-                       const std::vector<TBlob> &outputs,
-                       const SizeParam &size,
-                       int interp,
-                       int input_index = 0,
-                       int output_index = 0) {
- #if MXNET_USE_OPENCV
-   CHECK_NE(inputs[0].type_flag_, mshadow::kFloat16) << "opencv doesn't support fp16";
-   // mapping to opencv matrix element type according to channel
-   const int DTYPE[] = {CV_32F, CV_64F, -1, CV_8U, CV_32S};
-   if (inputs[0].ndim() == 3) {
-     const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[2]);
-     cv::Mat buf(inputs[0].shape_[H], inputs[0].shape_[W], cv_type, inputs[0].dptr_);
-     cv::Mat dst(outputs[0].shape_[H], outputs[0].shape_[W], cv_type, outputs[0].dptr_);
-     cv::Rect roi(x, y, width, height);
-     cv::resize(buf(roi), dst, cv::Size(size.width, size.height), 0, 0, interp);
-     CHECK(!dst.empty());
-     CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr_);
-   } else {
-     const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[3]);
-     MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-       cv::Mat buf(inputs[0].shape_[kH], inputs[0].shape_[kW], cv_type,
-         inputs[0].dptr<DType>() + input_index);
-       cv::Mat dst(outputs[0].shape_[kH], outputs[0].shape_[kW], cv_type,
-         outputs[0].dptr<DType>() + output_index);
-       cv::Rect roi(x, y, width, height);
-       cv::resize(buf(roi), dst, cv::Size(size.width, size.height), 0, 0, interp);
-       CHECK(!dst.empty());
-       CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr<DType>() + output_index);
-     });
-   }
- #else
-   LOG(FATAL) << "Build with USE_OPENCV=1 for image crop operator.";
- #endif  // MXNET_USE_OPENCV
- }
- 
-  inline void Crop(const nnvm::NodeAttrs &attrs,
+
+  void Crop(const nnvm::NodeAttrs &attrs,
                     const OpContext &ctx,
                     const std::vector<TBlob> &inputs,
                     const std::vector<OpReqType> &req,
@@ -235,10 +157,10 @@
  
     if (inputs[0].ndim() == 3) {
      if (need_resize) {
-       CropImpl(param.x, param.y, param.height, param.width,
-         inputs, outputs, size, param.interp.value());
+       CropImpl(inputs, outputs, param.x, param.y,
+       param.height, param.width, size, param.interp.value());
      } else {
-       CropImpl(param.x, param.y, param.height, param.width, inputs, outputs);
+       CropImpl(inputs, outputs, param.x, param.y, param.height, param.width);
      }
    } else {
      const auto batch_size = inputs[0].shape_[0];
@@ -252,11 +174,10 @@
      #pragma omp parallel for
      for (auto i = 0; i < batch_size; ++i) {
        if (need_resize) {
-         CropImpl(param.x, param.y, param.height, param.width,
-           inputs, outputs, size, param.interp.value(), input_offset * i, output_offset * i);
+         CropImpl(inputs, outputs, param.x, param.y, param.height, param.width, size, param.interp.value(), input_offset * i, output_offset * i);
        } else {
-         CropImpl(param.x, param.y, param.height, param.width,
-           inputs, outputs, input_offset * i, output_offset * i);
+         CropImpl(inputs, outputs, param.x, param.y, param.height, param.width,
+          input_offset * i, output_offset * i);
        }
      }
    }

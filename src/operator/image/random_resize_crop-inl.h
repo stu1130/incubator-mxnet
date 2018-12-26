@@ -28,14 +28,15 @@
 
 
 #include <algorithm>
+#include <utility>
 #include <vector>
+#include <math.h>
 
 #include "mxnet/base.h"
 #include "dmlc/optional.h"
 
 #include "../mxnet_op.h"
 #include "../operator_common.h"
-#include "crop-inl.h"
 #include "image_utils.h"
 
 namespace mxnet {
@@ -44,19 +45,19 @@ namespace image {
 
 struct RandomResizeCropParam : public dmlc::Parameter<RandomResizeCropParam> {
   nnvm::Tuple<int> size;
-  nnvm::Tuple<int> scale;
-  nnvm::Tuple<int> ratio;
+  nnvm::Tuple<float> scale;
+  nnvm::Tuple<float> ratio;
   int interp;
   DMLC_DECLARE_PARAMETER(RandomResizeCropParam) {
     DMLC_DECLARE_FIELD(size)
     .set_default(nnvm::Tuple<int>())
     .describe("Size of the final output.");
     DMLC_DECLARE_FIELD(scale)
-    .set_default(nnvm::Tuple<int>())
+    .set_default(nnvm::Tuple<float>())
     .describe("If scale is `(min_area, max_area)`, the cropped image's area will"
         "range from min_area to max_area of the original image's area");
     DMLC_DECLARE_FIELD(ratio)
-    .set_default(nnvm::Tuple<int>())
+    .set_default(nnvm::Tuple<float>())
     .describe("Range of aspect ratio of the cropped image before resizing.");
     DMLC_DECLARE_FIELD(interp)
     .describe("Interpolation method for resizing. By default uses bilinear"
@@ -94,47 +95,76 @@ void RandomResizeCrop(const nnvm::NodeAttrs &attrs,
   CHECK_EQ(outputs.size(), 1U);
   CHECK((inputs[0].ndim() == 3) || (inputs[0].ndim() == 4))
       << "Input data must be (h, w, c) or (n, h, w, c)";
-  const CenterCropParam& param = nnvm::get<CenterCropParam>(attrs.parsed);
-  const auto size = GetHeightAndWidthFromSize(param);
-  auto need_resize = false;
-  int h, w;
-  if (inputs[0].ndim() == 3) {
-    h = inputs[0].shape_[0];
-    w = inputs[0].shape_[1];
+  const RandomResizeCropParam& param = nnvm::get<RandomResizeCropParam>(attrs.parsed);
+  
+  auto h = inputs[0].shape_[inputs[0].ndim() == 3 ? H : kH];
+  auto w = inputs[0].shape_[inputs[0].ndim() == 3 ? H : kW];
+  auto src_area = h * w;
+
+  CHECK(param.scale.ndim() == 1 || param.scale.ndim() == 2)
+         << "Input scale must be float in (0, 1] or tuple of (float, float)";
+  std::pair<float, float> area;
+  if (param.scale.ndim() == 1) {
+    area = std::make_pair(param.scale[0], 1.0);
   } else {
-    h = inputs[0].shape_[1];
-    w = inputs[0].shape_[2];
+    area = std::make_pair(param.scale[0], param.scale[1]);
   }
-  const auto new_size = ScaleDown(SizeParam(h, w), size);
-  if ((new_size.height != size.height) || (new_size.width != size.width)) {
-    need_resize = true;
-  } 
-  const auto x0 = static_cast<int>((w - new_size.width) / 2);
-  const auto y0 = static_cast<int>((h - new_size.height) / 2);
-  if (inputs[0].ndim() == 3) {
-    if (need_resize) {
-      CropImpl(x0, y0, new_size.height, new_size.width, inputs, outputs, size, param.interp);
-    } else {
-      CropImpl(x0, y0, new_size.height, new_size.width, inputs, outputs);
+  // namespace for Stream
+  using namespace mshadow;
+  Stream<cpu> *s = ctx.get_stream<cpu>();
+  Random<cpu> *prnd = ctx.requested[0].get_random<cpu, float>(s);
+  for (auto i = 0; i < 10; ++i) {
+    float target_area = static_cast<float>(std::uniform_real_distribution<float>(
+      area.first, area.second)(prnd->GetRndEngine()) * src_area);
+    float new_ratio = static_cast<float>(std::uniform_real_distribution<float>(
+      param.ratio[0], param.ratio[1])(prnd->GetRndEngine()));
+
+    int new_w = static_cast<int>(round(sqrt(target_area * new_ratio)));
+    int new_h = static_cast<int>(round(sqrt(target_area / new_ratio)));
+
+    if (std::uniform_real_distribution<float>(0.0, 1.0)(prnd->GetRndEngine()) < 0.5) {
+      new_h = new_w;
+      new_w = new_h;
     }
-  } else {
-    const auto batch_size = inputs[0].shape_[0];
-    const auto input_offset = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
-    int output_offset;
-    if (need_resize) {
-      output_offset = size.height * size.width * outputs[0].shape_[kC];
-    } else {
-      output_offset = new_size.height * new_size.width * outputs[0].shape_[kC];
-    }
-    #pragma omp parallel for
-    for (auto i = 0; i < batch_size; ++i) {
-      if (need_resize) {
-        CropImpl(x0, y0, new_size.height, new_size.width, inputs, outputs, size, param.interp, input_offset * i, output_offset * i);
-      } else {
-        CropImpl(x0, y0, new_size.height, new_size.width, inputs, outputs, input_offset * i, output_offset * i);
+
+    if (new_w <= w && new_h <= h) {
+      int x0 = std::uniform_int_distribution<int>(0, w - new_w)(prnd->GetRndEngine());
+      int y0 = std::uniform_int_distribution<int>(0, h - new_h)(prnd->GetRndEngine());
+      SizeParam size = GetHeightAndWidthFromSize(param);
+      bool need_resize = false;
+
+      if ((size.height != new_h) || (size.width != new_w)) {
+        need_resize = true;
       }
+      if (inputs[0].ndim() == 3) {
+        if (need_resize) {
+          CropImpl(inputs, outputs, x0, y0, new_w, new_h, size, param.interp);
+        } else {
+          CropImpl(inputs, outputs, x0, y0, new_w, new_h);
+        }
+      } else {
+        const auto batch_size = inputs[0].shape_[0];
+        const auto input_offset = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
+        int output_offset;
+        if (need_resize) {
+          output_offset = size.height * size.width * outputs[0].shape_[kC];
+        } else {
+          output_offset = new_h * new_w * outputs[0].shape_[kC];
+        }
+        #pragma omp parallel for
+        for (auto i = 0; i < batch_size; ++i) {
+          if (need_resize) {
+            CropImpl(inputs, outputs, x0, y0, new_w, new_h, size, param.interp, input_offset * i, output_offset * i);
+          } else {
+            CropImpl(inputs, outputs, x0, y0, new_w, new_h, input_offset * i, output_offset * i);
+          }
+        }
+      }
+      return ;
     }
   }
+  // fall back to center_crop
+  return CenterCropImpl(inputs, outputs, GetHeightAndWidthFromSize(param), param.interp);
 }
 }  // namespace image
 }  // namespace op

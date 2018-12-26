@@ -42,6 +42,10 @@ NNVM_REGISTER_OP(_image_random_resize_crop)
 .set_attr<nnvm::FInferShape>("FInferShape", RandomResizeCropShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
 .set_attr<FCompute>("FCompute<cpu>", RandomResizeCrop)
+.set_attr<FResourceRequest>("FResourceRequest",
+  [](const NodeAttrs& attrs) {        
+    return std::vector<ResourceRequest>{ResourceRequest::kRandom};
+})
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{ "_copy" })
 .add_argument("data", "NDArray-or-Symbol", "The input.")
 .add_arguments(RandomResizeCropParam::__FIELDS__());

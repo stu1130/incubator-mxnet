@@ -35,7 +35,6 @@
 
 #include "../mxnet_op.h"
 #include "../operator_common.h"
-#include "crop-inl.h"
 #include "image_utils.h"
 
 namespace mxnet {
@@ -54,39 +53,6 @@ struct CenterCropParam : public dmlc::Parameter<CenterCropParam> {
         "interpolation. See OpenCV's resize function for available choices.");
   }
 };
-
-template<typename T>
-inline SizeParam GetHeightAndWidthFromSize(const T& param) {
-  int h, w;
-  if (param.size.ndim() == 1) {
-    h = param.size[0];
-    w = param.size[0];
-  } else {
-    // size should be (w, h) instead of (h, w)
-    h = param.size[1];
-    w = param.size[0];
-  }
-  return SizeParam(h, w);
-}
-
-// Scales down crop size if it's larger than image size.
-inline SizeParam ScaleDown(const SizeParam& src,
-                            const SizeParam& size) {
-  const auto src_h = src.height;
-  const auto src_w = src.width;
-  auto dst_h = size.height;
-  auto dst_w = size.width;
-
-  if (src_h < dst_h) {
-    dst_w = static_cast<int>((dst_w * src_h) / dst_h);
-    dst_h = src_h;
-  }
-  if (src_w < dst_w) {
-    dst_h = static_cast<int>((dst_h * src_w) / dst_w);
-    dst_w = src_w;
-  }
-  return SizeParam(dst_h, dst_w);
-}
 
 bool CenterCropShape(const nnvm::NodeAttrs& attrs,
                              std::vector<TShape> *in_attrs,
@@ -120,45 +86,9 @@ void CenterCrop(const nnvm::NodeAttrs &attrs,
       << "Input data must be (h, w, c) or (n, h, w, c)";
   const CenterCropParam& param = nnvm::get<CenterCropParam>(attrs.parsed);
   const auto size = GetHeightAndWidthFromSize(param);
-  auto need_resize = false;
-  int h, w;
-  if (inputs[0].ndim() == 3) {
-    h = inputs[0].shape_[0];
-    w = inputs[0].shape_[1];
-  } else {
-    h = inputs[0].shape_[1];
-    w = inputs[0].shape_[2];
-  }
-  const auto new_size = ScaleDown(SizeParam(h, w), size);
-  if ((new_size.height != size.height) || (new_size.width != size.width)) {
-    need_resize = true;
-  } 
-  const auto x0 = static_cast<int>((w - new_size.width) / 2);
-  const auto y0 = static_cast<int>((h - new_size.height) / 2);
-  if (inputs[0].ndim() == 3) {
-    if (need_resize) {
-      CropImpl(x0, y0, new_size.height, new_size.width, inputs, outputs, size, param.interp);
-    } else {
-      CropImpl(x0, y0, new_size.height, new_size.width, inputs, outputs);
-    }
-  } else {
-    const auto batch_size = inputs[0].shape_[0];
-    const auto input_offset = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
-    int output_offset;
-    if (need_resize) {
-      output_offset = size.height * size.width * outputs[0].shape_[kC];
-    } else {
-      output_offset = new_size.height * new_size.width * outputs[0].shape_[kC];
-    }
-    #pragma omp parallel for
-    for (auto i = 0; i < batch_size; ++i) {
-      if (need_resize) {
-        CropImpl(x0, y0, new_size.height, new_size.width, inputs, outputs, size, param.interp, input_offset * i, output_offset * i);
-      } else {
-        CropImpl(x0, y0, new_size.height, new_size.width, inputs, outputs, input_offset * i, output_offset * i);
-      }
-    }
-  }
+
+  CenterCropImpl(inputs, outputs, size, param.interp);
+  
 }
 }  // namespace image
 }  // namespace op
