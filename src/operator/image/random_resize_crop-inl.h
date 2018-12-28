@@ -98,14 +98,14 @@ void RandomResizeCrop(const nnvm::NodeAttrs &attrs,
   const RandomResizeCropParam& param = nnvm::get<RandomResizeCropParam>(attrs.parsed);
   
   auto h = inputs[0].shape_[inputs[0].ndim() == 3 ? H : kH];
-  auto w = inputs[0].shape_[inputs[0].ndim() == 3 ? H : kW];
+  auto w = inputs[0].shape_[inputs[0].ndim() == 3 ? W : kW];
   auto src_area = h * w;
 
   CHECK(param.scale.ndim() == 1 || param.scale.ndim() == 2)
          << "Input scale must be float in (0, 1] or tuple of (float, float)";
   std::pair<float, float> area;
   if (param.scale.ndim() == 1) {
-    area = std::make_pair(param.scale[0], 1.0);
+    area = std::make_pair(param.scale[0], 1.0f);
   } else {
     area = std::make_pair(param.scale[0], param.scale[1]);
   }
@@ -138,9 +138,9 @@ void RandomResizeCrop(const nnvm::NodeAttrs &attrs,
       }
       if (inputs[0].ndim() == 3) {
         if (need_resize) {
-          CropImpl(inputs, outputs, x0, y0, new_w, new_h, size, param.interp);
+          CropImpl(inputs, outputs, x0, y0, new_h, new_w, size, param.interp);
         } else {
-          CropImpl(inputs, outputs, x0, y0, new_w, new_h);
+          CropImpl(inputs, outputs, x0, y0, new_h, new_w);
         }
       } else {
         const auto batch_size = inputs[0].shape_[0];
@@ -154,9 +154,9 @@ void RandomResizeCrop(const nnvm::NodeAttrs &attrs,
         #pragma omp parallel for
         for (auto i = 0; i < batch_size; ++i) {
           if (need_resize) {
-            CropImpl(inputs, outputs, x0, y0, new_w, new_h, size, param.interp, input_offset * i, output_offset * i);
+            CropImpl(inputs, outputs, x0, y0, new_h, new_w, size, param.interp, input_offset * i, output_offset * i);
           } else {
-            CropImpl(inputs, outputs, x0, y0, new_w, new_h, input_offset * i, output_offset * i);
+            CropImpl(inputs, outputs, x0, y0, new_h, new_w, input_offset * i, output_offset * i);
           }
         }
       }

@@ -120,67 +120,67 @@ bool CropShape(const nnvm::NodeAttrs& attrs,
  }
  
 
-  void Crop(const nnvm::NodeAttrs &attrs,
+void Crop(const nnvm::NodeAttrs &attrs,
                     const OpContext &ctx,
                     const std::vector<TBlob> &inputs,
                     const std::vector<OpReqType> &req,
                     const std::vector<TBlob> &outputs) {
-   CHECK_EQ(outputs.size(), 1U);
-   const CropParam& param = nnvm::get<CropParam>(attrs.parsed);
-   const bool has_size = param.size.has_value();
-   auto need_resize = false;
-   SizeParam size;
-   CHECK((param.height > 0) && (param.width > 0))
-       << "Input height and width must be greater than 0";
-   if (has_size) {
-     CHECK(param.size.value().ndim() == 1 || param.size.value().ndim() == 2)
-         << "Input size must be int size or (width, height)";
-     if (param.size.value().ndim() == 1) {
-       CHECK_GT(param.size.value()[0], 0)
-         << "Input size should greater than 0, but got "
-         << param.size.value()[0];
-       size = SizeParam(param.size.value()[0], param.size.value()[0]);
-     } else {
-       CHECK_GT(param.size.value()[0], 0)
-         << "Input width in size should greater than 0, but got "
-         << param.size.value()[0];
-       CHECK_GT(param.size.value()[1], 0)
-         << "Input height in size should greater than 0, but got "
-         << param.size.value()[1];
-       size = SizeParam(param.size.value()[1], param.size.value()[0]);
-     }
-     // if size given is not the same as input height, width, resize it.
-     if ((param.height != size.height) || (param.width != size.width)) {
-       need_resize = true;
-     }
-   }
+  CHECK_EQ(outputs.size(), 1U);
+  const CropParam& param = nnvm::get<CropParam>(attrs.parsed);
+  const bool has_size = param.size.has_value();
+  auto need_resize = false;
+  SizeParam size;
+  CHECK((param.height > 0) && (param.width > 0))
+      << "Input height and width must be greater than 0";
+  if (has_size) {
+    CHECK(param.size.value().ndim() == 1 || param.size.value().ndim() == 2)
+        << "Input size must be int size or (width, height)";
+    if (param.size.value().ndim() == 1) {
+      CHECK_GT(param.size.value()[0], 0)
+        << "Input size should greater than 0, but got "
+        << param.size.value()[0];
+      size = SizeParam(param.size.value()[0], param.size.value()[0]);
+    } else {
+      CHECK_GT(param.size.value()[0], 0)
+        << "Input width in size should greater than 0, but got "
+        << param.size.value()[0];
+      CHECK_GT(param.size.value()[1], 0)
+        << "Input height in size should greater than 0, but got "
+        << param.size.value()[1];
+      size = SizeParam(param.size.value()[1], param.size.value()[0]);
+    }
+    // if size given is not the same as input height, width, resize it.
+    if ((param.height != size.height) || (param.width != size.width)) {
+      need_resize = true;
+    }
+  }
  
-    if (inputs[0].ndim() == 3) {
-     if (need_resize) {
+  if (inputs[0].ndim() == 3) {
+    if (need_resize) {
        CropImpl(inputs, outputs, param.x, param.y,
        param.height, param.width, size, param.interp.value());
      } else {
        CropImpl(inputs, outputs, param.x, param.y, param.height, param.width);
      }
-   } else {
-     const auto batch_size = inputs[0].shape_[0];
-     const auto input_offset = inputs[0].shape_[1] * inputs[0].shape_[2] * inputs[0].shape_[3];
-     int output_offset;
-     if (need_resize) {
-       output_offset = size.height * size.width * outputs[0].shape_[3];
-     } else {
-       output_offset = param.width * param.height * outputs[0].shape_[3];
-     }
-     #pragma omp parallel for
-     for (auto i = 0; i < batch_size; ++i) {
-       if (need_resize) {
-         CropImpl(inputs, outputs, param.x, param.y, param.height, param.width, size, param.interp.value(), input_offset * i, output_offset * i);
-       } else {
-         CropImpl(inputs, outputs, param.x, param.y, param.height, param.width,
+  } else {
+    const auto batch_size = inputs[0].shape_[0];
+    const auto input_offset = inputs[0].shape_[1] * inputs[0].shape_[2] * inputs[0].shape_[3];
+    int output_offset;
+    if (need_resize) {
+      output_offset = size.height * size.width * outputs[0].shape_[3];
+    } else {
+      output_offset = param.width * param.height * outputs[0].shape_[3];
+    }
+    #pragma omp parallel for
+    for (auto i = 0; i < batch_size; ++i) {
+      if (need_resize) {
+        CropImpl(inputs, outputs, param.x, param.y, param.height, param.width, size, param.interp.value(), input_offset * i, output_offset * i);
+      } else {
+        CropImpl(inputs, outputs, param.x, param.y, param.height, param.width,
           input_offset * i, output_offset * i);
-       }
-     }
-   }
+      }
+    }
+  }
  }
  }  // namespace image
  }  // namespace op
