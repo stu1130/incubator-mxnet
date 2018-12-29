@@ -94,70 +94,58 @@ inline void CropImpl(const std::vector<TBlob> &inputs,
   CHECK_NE(inputs[0].type_flag_, mshadow::kFloat16) << "opencv doesn't support fp16";
   // mapping to opencv matrix element type according to channel
   const int DTYPE[] = {CV_32F, CV_64F, -1, CV_8U, CV_32S};
-  if (inputs[0].ndim() == 3) {
-    const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[C]);
-    cv::Mat buf(inputs[0].shape_[H], inputs[0].shape_[W], cv_type, inputs[0].dptr_);
-    cv::Mat dst(outputs[0].shape_[H], outputs[0].shape_[W], cv_type, outputs[0].dptr_);
+  const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[(inputs[0].ndim() == 3) ? C : kC]);
+  MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+    cv::Mat buf(inputs[0].shape_[(inputs[0].ndim() == 3) ? H : kH],
+      inputs[0].shape_[(inputs[0].ndim() == 3) ? W : kW], cv_type,
+      inputs[0].dptr<DType>() + input_index);
+    cv::Mat dst(outputs[0].shape_[(inputs[0].ndim() == 3) ? H : kH],
+      outputs[0].shape_[(inputs[0].ndim() == 3) ? W : kW], cv_type,
+      outputs[0].dptr<DType>() + output_index);
     cv::Rect roi(x, y, width, height);
-    cv::resize(buf(roi), dst, cv::Size(size.width, size.height), 0, 0, interp);
-    CHECK(!dst.empty());
-    CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr_);
-  } else {
-    const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[(inputs[0].ndim() == 3) ? C : kC]);
-    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-      cv::Mat buf(inputs[0].shape_[kH], inputs[0].shape_[kW], cv_type,
-        inputs[0].dptr<DType>() + input_index);
-      cv::Mat dst(outputs[0].shape_[kH], outputs[0].shape_[kW], cv_type,
-        outputs[0].dptr<DType>() + output_index);
-      cv::Rect roi(x, y, width, height);
+    if ((size != nullptr) && ((height != size.height) || (width != size.width))) {
       cv::resize(buf(roi), dst, cv::Size(size.width, size.height), 0, 0, interp);
-      CHECK(!dst.empty());
-      CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr<DType>() + output_index);
-    });
-  }
+    } else {
+      buf(roi).copyTo(dst);
+    }
+    CHECK(!dst.empty());
+    CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr<DType>() + output_index);
+  });
 #else
   LOG(FATAL) << "Build with USE_OPENCV=1 for image crop operator.";
 #endif  // MXNET_USE_OPENCV
 }
 
 // overloading version of CropImpl without resize
-inline void CropImpl(const std::vector<TBlob> &inputs,
-                      const std::vector<TBlob> &outputs,
-                      int x,
-                      int y,
-                      int height,
-                      int width,
-                      int input_index = 0,
-                      int output_index = 0) {
-#if MXNET_USE_OPENCV
-  CHECK_NE(inputs[0].type_flag_, mshadow::kFloat16) << "opencv doesn't support fp16";
-  // mapping to opencv matrix element type according to channel
-  const int DTYPE[] = {CV_32F, CV_64F, -1, CV_8U, CV_32S};
-  if (inputs[0].ndim() == 3) {
-    const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[2]);
-    cv::Mat buf(inputs[0].shape_[H], inputs[0].shape_[W], cv_type, inputs[0].dptr_);
-    cv::Mat dst(outputs[0].shape_[H], outputs[0].shape_[W], cv_type, outputs[0].dptr_);
-    cv::Rect roi(x, y, width, height);
-    buf(roi).copyTo(dst);
-    CHECK(!dst.empty());
-    CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr_);
-  } else {
-    const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[3]);
-    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-      cv::Mat buf(inputs[0].shape_[kH], inputs[0].shape_[kW], cv_type,
-        inputs[0].dptr<DType>() + input_index);
-      cv::Mat dst(outputs[0].shape_[kH], outputs[0].shape_[kW], cv_type,
-        outputs[0].dptr<DType>() + output_index);
-      cv::Rect roi(x, y, width, height);
-      buf(roi).copyTo(dst);
-      CHECK(!dst.empty());
-      CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr<DType>() + output_index);
-    });
-  }
-#else
-  LOG(FATAL) << "Build with USE_OPENCV=1 for image crop operator.";
-#endif  // MXNET_USE_OPENCV
-}
+// inline void CropImpl(const std::vector<TBlob> &inputs,
+//                       const std::vector<TBlob> &outputs,
+//                       int x,
+//                       int y,
+//                       int height,
+//                       int width,
+//                       int input_index = 0,
+//                       int output_index = 0) {
+// #if MXNET_USE_OPENCV
+//   CHECK_NE(inputs[0].type_flag_, mshadow::kFloat16) << "opencv doesn't support fp16";
+//   // mapping to opencv matrix element type according to channel
+//   const int DTYPE[] = {CV_32F, CV_64F, -1, CV_8U, CV_32S};
+//   const int cv_type = CV_MAKETYPE(DTYPE[inputs[0].type_flag_], inputs[0].shape_[(inputs[0].ndim() == 3) ? C : kC]);
+//   MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+//     cv::Mat buf(inputs[0].shape_[(inputs[0].ndim() == 3) ? H : kH],
+//       inputs[0].shape_[(inputs[0].ndim() == 3) ? W : kW], cv_type,
+//       inputs[0].dptr<DType>() + input_index);
+//     cv::Mat dst(outputs[0].shape_[(inputs[0].ndim() == 3) ? H : kH],
+//       outputs[0].shape_[(inputs[0].ndim() == 3) ? W : kW], cv_type,
+//       outputs[0].dptr<DType>() + output_index);
+//     cv::Rect roi(x, y, width, height);
+//     buf(roi).copyTo(dst);
+//     CHECK(!dst.empty());
+//     CHECK_EQ(static_cast<void*>(dst.ptr()), outputs[0].dptr<DType>() + output_index);
+//   });
+// #else
+//   LOG(FATAL) << "Build with USE_OPENCV=1 for image crop operator.";
+// #endif  // MXNET_USE_OPENCV
+// }
 
 inline void CenterCropImpl(const std::vector<TBlob> &inputs,
                             const std::vector<TBlob> &outputs,
@@ -179,11 +167,7 @@ inline void CenterCropImpl(const std::vector<TBlob> &inputs,
   const auto x0 = static_cast<int>((w - new_size.width) / 2);
   const auto y0 = static_cast<int>((h - new_size.height) / 2);
   if (inputs[0].ndim() == 3) {
-    if (need_resize) {
-      CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width, size, interp);
-    } else {
-      CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width);
-    }
+    CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width, size, interp);
   } else {
     const auto batch_size = inputs[0].shape_[N];
     const auto input_offset = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
@@ -195,11 +179,7 @@ inline void CenterCropImpl(const std::vector<TBlob> &inputs,
     }
     #pragma omp parallel for
     for (auto i = 0; i < batch_size; ++i) {
-      if (need_resize) {
-        CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width, size, interp, input_offset * i, output_offset * i);
-      } else {
-        CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width, input_offset * i, output_offset * i);
-      }
+      CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width, size, interp, input_offset * i, output_offset * i);
     }
   }
 }

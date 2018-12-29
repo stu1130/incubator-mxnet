@@ -137,11 +137,7 @@ void RandomResizeCrop(const nnvm::NodeAttrs &attrs,
         need_resize = true;
       }
       if (inputs[0].ndim() == 3) {
-        if (need_resize) {
-          CropImpl(inputs, outputs, x0, y0, new_h, new_w, size, param.interp);
-        } else {
-          CropImpl(inputs, outputs, x0, y0, new_h, new_w);
-        }
+        CropImpl(inputs, outputs, x0, y0, new_h, new_w, size, param.interp);
       } else {
         const auto batch_size = inputs[0].shape_[0];
         const auto input_offset = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
@@ -153,11 +149,7 @@ void RandomResizeCrop(const nnvm::NodeAttrs &attrs,
         }
         #pragma omp parallel for
         for (auto i = 0; i < batch_size; ++i) {
-          if (need_resize) {
-            CropImpl(inputs, outputs, x0, y0, new_h, new_w, size, param.interp, input_offset * i, output_offset * i);
-          } else {
-            CropImpl(inputs, outputs, x0, y0, new_h, new_w, input_offset * i, output_offset * i);
-          }
+          CropImpl(inputs, outputs, x0, y0, new_h, new_w, size, param.interp, input_offset * i, output_offset * i);
         }
       }
       return ;
