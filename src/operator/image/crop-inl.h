@@ -157,16 +157,16 @@ void Crop(const nnvm::NodeAttrs &attrs,
       param.height, param.width, size, interp);
   } else {
     const auto batch_size = inputs[0].shape_[N];
-    const auto input_offset = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
-    int output_offset;
+    const auto input_step = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
+    int output_step;
     if (has_size && (size.height != param.height || size.width != param.width)) {
-      output_offset = size.height * size.width * outputs[0].shape_[kC];
+      output_step = size.height * size.width * outputs[0].shape_[kC];
     } else {
-      output_offset = param.width * param.height * outputs[0].shape_[kC];
+      output_step = param.width * param.height * outputs[0].shape_[kC];
     }
     #pragma omp parallel for
     for (auto i = 0; i < batch_size; ++i) {
-      CropImpl(inputs, outputs, param.x, param.y, param.height, param.width, size, interp, input_offset * i, output_offset * i);
+      CropImpl(inputs, outputs, param.x, param.y, param.height, param.width, size, interp, input_step * i, output_step * i);
     }
   }
  }

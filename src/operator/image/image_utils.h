@@ -139,16 +139,16 @@ inline void CenterCropImpl(const std::vector<TBlob> &inputs,
     CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width, size, interp);
   } else {
     const auto batch_size = inputs[0].shape_[N];
-    const auto input_offset = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
-    int output_offset;
+    const auto input_step = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
+    int output_step;
     if ((new_size.height != size.height) || (new_size.width != size.width)) {
-      output_offset = size.height * size.width * outputs[0].shape_[kC];
+      output_step = size.height * size.width * outputs[0].shape_[kC];
     } else {
-      output_offset = new_size.height * new_size.width * outputs[0].shape_[kC];
+      output_step = new_size.height * new_size.width * outputs[0].shape_[kC];
     }
     #pragma omp parallel for
     for (auto i = 0; i < batch_size; ++i) {
-      CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width, size, interp, input_offset * i, output_offset * i);
+      CropImpl(inputs, outputs, x0, y0, new_size.height, new_size.width, size, interp, input_step * i, output_step * i);
     }
   }
 }
