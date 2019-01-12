@@ -109,10 +109,8 @@ void RandomResizeCrop(const nnvm::NodeAttrs &attrs,
   } else {
     area = std::make_pair(param.scale[0], param.scale[1]);
   }
-  // namespace for Stream
-  using namespace mshadow;
-  Stream<cpu> *s = ctx.get_stream<cpu>();
-  Random<cpu> *prnd = ctx.requested[0].get_random<cpu, float>(s);
+  mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
+  mshadow::Random<cpu> *prnd = ctx.requested[0].get_random<cpu, float>(s);
   for (auto i = 0; i < 10; ++i) {
     float target_area = static_cast<float>(std::uniform_real_distribution<float>(
       area.first, area.second)(prnd->GetRndEngine()) * src_area);

@@ -119,61 +119,61 @@ def test_crop():
     for dtype in ['uint8', 'int8', 'float32', 'float64']:
         _test_crop_with_diff_type(dtype)    
 
-# @with_seed()
-# def test_center_crop():
-#     def _test_center_crop_with_diff_type(dtype):
-#         # test normal case
-#         data_in = nd.random.uniform(0, 255, (300, 200, 3)).astype(dtype)
-#         out_nd = transforms.CenterCrop((100, 100), 2)(data_in)
-#         data_expected = image.center_crop(data_in, (100, 100), 2)[0]
-#         assert_almost_equal(out_nd.asnumpy(), data_expected.asnumpy())
-#         # test 4D input
-#         data_bath_in = nd.random.uniform(0, 255, (3, 300, 200, 3)).astype(dtype)
-#         out_batch_nd = transforms.CenterCrop((100, 100), 2)(data_bath_in)
-#         for i in range(len(out_batch_nd)):
-#             assert_almost_equal(image.center_crop(data_bath_in[i], (100, 100), 2)[0].asnumpy(),
-#                 out_batch_nd[i].asnumpy())
-#         # test size is larger than input image
-#         data_in = nd.random.uniform(0, 255, (100, 100, 3)).astype(dtype)
-#         out_nd = transforms.CenterCrop((200, 150), 2)(data_in)
-#         data_expected = image.center_crop(data_in, (200, 150), 2)[0]
-#         assert_almost_equal(out_nd.asnumpy(), data_expected.asnumpy())
-#         # test size is larger than input image 4D
-#         data_bath_in = nd.random.uniform(0, 255, (3, 100, 100, 3)).astype(dtype)
-#         out_batch_nd = transforms.CenterCrop((200, 150), 2)(data_bath_in)
-#         for i in range(len(out_batch_nd)):
-#             assert_almost_equal(image.center_crop(data_bath_in[i], (200, 150), 2)[0].asnumpy(),
-#                 out_batch_nd[i].asnumpy())
-#         def _test_size_below_zero_Exception():
-#             transforms.CenterCrop((-200, 150), 2)(data_in)
-#         assertRaises(MXNetError, _test_size_below_zero_Exception)
+@with_seed()
+def test_center_crop():
+    def _test_center_crop_with_diff_type(dtype):
+        # test normal case
+        data_in = nd.random.uniform(0, 255, (300, 200, 3)).astype(dtype)
+        out_nd = transforms.CenterCrop((100, 100), 2)(data_in)
+        data_expected = image.center_crop(data_in, (100, 100), 2)[0]
+        assert_almost_equal(out_nd.asnumpy(), data_expected.asnumpy())
+        # test 4D input
+        data_bath_in = nd.random.uniform(0, 255, (3, 300, 200, 3)).astype(dtype)
+        out_batch_nd = transforms.CenterCrop((100, 100), 2)(data_bath_in)
+        for i in range(len(out_batch_nd)):
+            assert_almost_equal(image.center_crop(data_bath_in[i], (100, 100), 2)[0].asnumpy(),
+                out_batch_nd[i].asnumpy())
+        # test size is larger than input image
+        data_in = nd.random.uniform(0, 255, (100, 100, 3)).astype(dtype)
+        out_nd = transforms.CenterCrop((200, 150), 2)(data_in)
+        data_expected = image.center_crop(data_in, (200, 150), 2)[0]
+        assert_almost_equal(out_nd.asnumpy(), data_expected.asnumpy())
+        # test size is larger than input image 4D
+        data_bath_in = nd.random.uniform(0, 255, (3, 100, 100, 3)).astype(dtype)
+        out_batch_nd = transforms.CenterCrop((200, 150), 2)(data_bath_in)
+        for i in range(len(out_batch_nd)):
+            assert_almost_equal(image.center_crop(data_bath_in[i], (200, 150), 2)[0].asnumpy(),
+                out_batch_nd[i].asnumpy())
+        def _test_size_below_zero_Exception():
+            transforms.CenterCrop((-200, 150), 2)(data_in)
+        assertRaises(MXNetError, _test_size_below_zero_Exception)
 
-#     for dtype in ['uint8', 'int8', 'float32', 'float64']:
-#         _test_center_crop_with_diff_type(dtype)
+    for dtype in ['uint8', 'int8', 'float32', 'float64']:
+        _test_center_crop_with_diff_type(dtype)
 
 
-# @with_seed()
-# def test_random_resize_crop():
-#     def _test_random_resize_crop_with_diff_type(dtype):
-#         # test normal case
-#         data_in = nd.random.uniform(0, 255, (300, 200, 3)).astype(dtype)
-#         out_nd = transforms.RandomResizedCrop((100, 120))(data_in)
-#         assert out_nd.shape == (120, 100, 3), out_nd.shape
-#         # test 4D input
-#         data_bath_in = nd.random.uniform(0, 255, (3, 300, 200, 3)).astype(dtype)
-#         out_batch_nd = transforms.RandomResizedCrop((50, 70))(data_bath_in)
-#         assert out_batch_nd.shape == (3, 70, 50, 3), out_nd.shape
-#         # test normal case
-#         data_in = nd.random.uniform(0, 255, (50, 30, 3)).astype(dtype)
-#         out_nd = transforms.RandomResizedCrop((140, 100))(data_in)
-#         assert out_nd.shape == (100, 140, 3), out_nd.shape
-#          # test size is larger than input image 4D
-#         data_in = nd.random.uniform(0, 255, (4, 50, 30, 3)).astype(dtype)
-#         out_nd = transforms.RandomResizedCrop((100, 140))(data_in)
-#         assert out_nd.shape == (4, 140, 100, 3), out_nd.shape
+@with_seed()
+def test_random_resize_crop():
+    def _test_random_resize_crop_with_diff_type(dtype):
+        # test normal case
+        data_in = nd.random.uniform(0, 255, (300, 200, 3)).astype(dtype)
+        out_nd = transforms.RandomResizedCrop((100, 120))(data_in)
+        assert out_nd.shape == (120, 100, 3), out_nd.shape
+        # test 4D input
+        data_bath_in = nd.random.uniform(0, 255, (3, 300, 200, 3)).astype(dtype)
+        out_batch_nd = transforms.RandomResizedCrop((50, 70))(data_bath_in)
+        assert out_batch_nd.shape == (3, 70, 50, 3), out_nd.shape
+        # test normal case
+        data_in = nd.random.uniform(0, 255, (50, 30, 3)).astype(dtype)
+        out_nd = transforms.RandomResizedCrop((140, 100))(data_in)
+        assert out_nd.shape == (100, 140, 3), out_nd.shape
+         # test size is larger than input image 4D
+        data_in = nd.random.uniform(0, 255, (4, 50, 30, 3)).astype(dtype)
+        out_nd = transforms.RandomResizedCrop((100, 140))(data_in)
+        assert out_nd.shape == (4, 140, 100, 3), out_nd.shape
 
-#     for dtype in ['uint8', 'int8', 'float32', 'float64']:
-#         _test_random_resize_crop_with_diff_type(dtype)
+    for dtype in ['uint8', 'int8', 'float32', 'float64']:
+        _test_random_resize_crop_with_diff_type(dtype)
 
 
 @with_seed()

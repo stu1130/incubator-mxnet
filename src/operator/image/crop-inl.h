@@ -128,9 +128,8 @@ void Crop(const nnvm::NodeAttrs &attrs,
   CHECK_EQ(outputs.size(), 1U);
   const CropParam& param = nnvm::get<CropParam>(attrs.parsed);
   const bool has_size = param.size.has_value();
-  auto need_resize = false;
-  SizeParam size = nullptr;
-  int interp = nullptr;
+  SizeParam size;
+  int interp;
   CHECK((param.height > 0) && (param.width > 0))
       << "Input height and width must be greater than 0";
   if (has_size) {
@@ -157,13 +156,13 @@ void Crop(const nnvm::NodeAttrs &attrs,
     CropImpl(inputs, outputs, param.x, param.y,
       param.height, param.width, size, interp);
   } else {
-    const auto batch_size = inputs[0].shape_[0];
-    const auto input_offset = inputs[0].shape_[1] * inputs[0].shape_[2] * inputs[0].shape_[3];
+    const auto batch_size = inputs[0].shape_[N];
+    const auto input_offset = inputs[0].shape_[kH] * inputs[0].shape_[kW] * inputs[0].shape_[kC];
     int output_offset;
-    if (need_resize) {
-      output_offset = size.height * size.width * outputs[0].shape_[3];
+    if (has_size && (size.height != param.height || size.width != param.width)) {
+      output_offset = size.height * size.width * outputs[0].shape_[kC];
     } else {
-      output_offset = param.width * param.height * outputs[0].shape_[3];
+      output_offset = param.width * param.height * outputs[0].shape_[kC];
     }
     #pragma omp parallel for
     for (auto i = 0; i < batch_size; ++i) {
