@@ -238,7 +238,10 @@ class Crop(HybridBlock):
         self._interpolation = interpolation
 
     def hybrid_forward(self, F, x):
-        return F.image.crop(x, self._x0, self._y0, self._width, self._height, self._size, self._interpolation)
+        out = F.image.crop(x, self._x0, self._y0, self._width, self._height)
+        if self._size is not None:
+            out = F.image.resize(out, self._size, False, self._interpolation)
+        return out 
 
 
 class RandomResizedCrop(Block):
