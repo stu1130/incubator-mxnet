@@ -5494,6 +5494,7 @@ def _custom_exc4(seed):
         c.wait_to_read()
     assert_raises(MXNetError, custom_exc4)
 
+@unittest.skip("https://github.com/apache/incubator-mxnet/issues/14835")
 @with_seed()
 def test_custom_op_exc():
     # test except handling
