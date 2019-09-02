@@ -97,14 +97,22 @@ class Imperative {
       is_recording_ = is_recording;
       return old;
   }
-  /*! brief whether numpy compatibility is on. */
+  /*! \brief whether numpy compatibility is on. */
   bool is_np_shape() const {
+    if (is_np_shape_global_) {
+      return true;
+    }
     return is_np_shape_;
   }
-  /*! brief turn on or turn off numpy compatibility switch. */
-  bool set_is_np_shape(bool is_np_shape) {
-    bool old = is_np_shape_;
-    is_np_shape_ = is_np_shape;
+  /*! \brief turn on or turn off numpy compatibility switch. */
+  bool set_is_np_shape(bool is_np_shape, bool is_global) {
+    bool old = this->is_np_shape();
+    if (is_global) {
+      is_np_shape_global_ = is_np_shape;
+      is_np_shape_ = is_np_shape;
+    } else {
+      is_np_shape_ = is_np_shape;
+    }
     return old;
   }
   /*! \brief to record operator, return corresponding node. */
@@ -185,6 +193,7 @@ class Imperative {
   // Delete it in the next major release.
   static MX_THREAD_LOCAL bool is_np_shape_;
 #endif
+  static bool is_np_shape_global_;
   /*! \brief node count used for naming */
   std::atomic<uint64_t> node_count_{0};
   /*! \brief variable count used for naming */

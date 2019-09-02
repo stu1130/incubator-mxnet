@@ -282,9 +282,9 @@ int MXIsNumpyShape(bool* curr) {
   API_END();
 }
 
-int MXSetIsNumpyShape(int is_np_shape, int* prev) {
+int MXSetIsNumpyShape(int is_np_shape, int* prev, int is_global) {
   API_BEGIN();
-  *prev = Imperative::Get()->set_is_np_shape(static_cast<bool>(is_np_shape));
+  *prev = Imperative::Get()->set_is_np_shape(static_cast<bool>(is_np_shape), static_cast<bool>(is_global));
   API_END();
 }
 
